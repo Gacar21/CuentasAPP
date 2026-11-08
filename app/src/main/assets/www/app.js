@@ -218,8 +218,10 @@ function vistaInicio(v) {
   const metas = datos.metas.filter((m) => F.ahorrado(m) < m.objetivo).slice(0, 3);
   const recientes = datos.movimientos.slice().sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.creado || 0) - (a.creado || 0)).slice(0, 5);
   const meDeben = datos.deudas.filter((d) => d.direccion === 'me_deben').reduce((t, d) => t + F.pendienteDeuda(d), 0);
-  const debo = datos.deudas.filter((d) => d.direccion === 'debo').reduce((t, d) => t + F.pendienteDeuda(d), 0)
-    + datos.cuotas.reduce((t, c) => t + F.saldoCuotas(c), 0);
+  const deboPrestamos = datos.deudas.filter((d) => d.direccion === 'debo').reduce((t, d) => t + F.pendienteDeuda(d), 0);
+  const deboCuotas = datos.cuotas.reduce((t, c) => t + F.saldoCuotas(c), 0);
+  const debo = deboPrestamos + deboCuotas;
+  const propio = total - debo;
 
   v.innerHTML = `
     <div class="head">
@@ -227,8 +229,12 @@ function vistaInicio(v) {
       <button class="icon-btn" id="btnAjustes" aria-label="Ajustes">${ICO.gear}</button>
     </div>
     <div class="hero">
-      <p class="hero-label">SALDO DISPONIBLE</p>
+      <p class="hero-label">SALDO DISPONIBLE · EN MIS CUENTAS</p>
       <p class="hero-amount num">${F.dinero(total)}</p>
+      <button class="hero-propio" id="btnPropio">
+        <span>Lo que es mío<small>${debo ? 'descontando lo que debo' : 'no tienes deudas'}</small></span>
+        <b class="num">${F.dinero(propio)}</b><i>›</i>
+      </button>
       <div class="hero-row">
         <div class="hero-box"><span><span class="arrow">▲</span>Ingresos del mes</span><b class="num">${F.dinero(r.ingresos)}</b></div>
         <div class="hero-box"><span><span class="arrow">▼</span>Gastos del mes</span><b class="num">${F.dinero(r.egresos)}</b></div>
@@ -298,6 +304,7 @@ function vistaInicio(v) {
     </div>`;
 
   $('#btnAjustes', v).addEventListener('click', () => irA('ajustes'));
+  $('#btnPropio', v).addEventListener('click', () => abrirPanel((s) => detallePropio(s, { total, deboPrestamos, deboCuotas, meDeben })));
   enlazarMes(v);
   enlazarMovimientos(v);
   $$('[data-ir]', v).forEach((b) => b.addEventListener('click', () => {
@@ -316,6 +323,23 @@ function vistaInicio(v) {
     if (tipo === 'cuota') abrirPanel((s) => detalleCuota(s, id));
     else abrirPanel((s) => detalleDeuda(s, id));
   }));
+}
+
+function detallePropio(s, { total, deboPrestamos, deboCuotas, meDeben }) {
+  const propio = total - deboPrestamos - deboCuotas;
+  const linea = (t, v, clase = '') => `<div class="row"><span class="row-main"><span class="row-title" style="font-weight:500">${t}</span></span><span class="row-amt ${clase}">${v}</span></div>`;
+  s.innerHTML += `<h3>¿Cuánto es mío?</h3>
+    <p class="hint" style="margin:0 0 12px">El saldo disponible es la plata que hay en tus cuentas, incluida la que te prestaron. Lo que es tuyo es eso menos lo que debes.</p>
+    <div class="detail-list">
+      ${linea('En mis cuentas', F.dinero(total))}
+      ${linea('Préstamos que debo', '−' + F.dinero(deboPrestamos), 'down')}
+      ${linea('Cuotas por pagar', '−' + F.dinero(deboCuotas), 'down')}
+      <div class="row" style="border-top:2px solid var(--ink)"><span class="row-main"><span class="row-title">Lo que es mío</span></span><span class="row-amt ${propio < 0 ? 'down' : 'up'}" style="font-size:18px">${F.dinero(propio)}</span></div>
+    </div>
+    ${meDeben ? `<p class="hint" style="margin-top:12px">Además te deben ${F.dinero(meDeben)}. Si te pagan todo, tendrías ${F.dinero(propio + meDeben)}.</p>` : ''}
+    <div class="sheet-actions"><button class="btn ghost" id="pdCerrar">Cerrar</button><button class="btn soft" id="pdDeudas">Ver deudas</button></div>`;
+  $('#pdCerrar', s).addEventListener('click', () => atrasPanel());
+  $('#pdDeudas', s).addEventListener('click', () => { st.deudasTab = 'debo'; cerrarPaneles(); irA('deudas'); });
 }
 
 /* ======================= pantalla: movimientos ======================= */
